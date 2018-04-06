@@ -1,0 +1,219 @@
+<html>
+
+<head>
+
+  <style>
+
+  textarea{
+    width:50%;
+    min-height:60px;
+  }
+  #emojiSelector{
+
+  }
+  #emojiSelector li{
+    color:#333;
+    background-color:#ccc;
+    display:inline-block;
+    height:60px;
+    width:60px;
+    font-size:40px;
+    line-height:60px;
+    text-align:center;
+    margin:10px;
+    border-radius:5px;
+    cursor: pointer;
+  }
+
+  #messages{
+    font-size:18px;
+    padding:0;
+    margin:0;
+  }
+  #messages li{
+      display:block;
+      margin:0;
+      padding:10px;
+  }
+  #messages li:nth-child(odd){
+    background:#ddd;
+  }
+  #messages li textarea{
+    display:block;
+  }
+  </style>
+
+<script
+  src="https://code.jquery.com/jquery-3.3.1.js"
+  integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60="
+  crossorigin="anonymous"></script>
+
+  <script src="./lib/js/config.js"></script>
+  <script src="./crypto-js/rollups/aes.js"></script>
+
+
+<script>
+
+
+function b64EncodeUnicode(str) {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+        return String.fromCharCode('0x' + p1);
+    }));
+}
+function b64DecodeUnicode(str) {
+    return decodeURIComponent(Array.prototype.map.call(atob(str), function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+}
+
+
+
+function Filter(string){
+    var results = Array();
+    for(var prop in Config.Emoji) {
+      if(string === '' || Config.Emoji[prop][1][0].indexOf(string) !== -1)
+      results.push(Config.Emoji[prop]);
+    }
+
+    $('ul#emojiSelector li').hide();
+    for(i = 0; i < results.length; i++){
+      $('ul#emojiSelector li[data-value="'+results[i][0]+'"]').show();
+    }
+//    console.log(results);
+}
+
+function showAll(){
+  var results = Array();
+  for(var prop in Config.Emoji) {
+    $('ul#emojiSelector').append('<li data-value="'+Config.Emoji[prop][0]+'">'+Config.Emoji[prop][0]+'</li>');
+  }
+}
+
+function encrypt(plaintext, passphrase){
+  cyphertext = CryptoJS.AES.encrypt(plaintext.toString(), passphrase);
+  return cyphertext;
+}
+
+function decrypt(cyphertext, passphrase){
+  plaintext = CryptoJS.AES.decrypt(cyphertext, passphrase).toString(CryptoJS.enc.Utf8);
+  return plaintext;
+}
+
+function getLocalStorage(prefix){
+  var Storage = Array();
+  for ( var i = 0, len = localStorage.length; i < len; ++i ) {
+
+    if( localStorage.key(i).indexOf(prefix) == 0){
+      Storage.push(localStorage.key(i));
+    }
+
+  }
+//  console.log(Storage);
+  return Storage;
+}
+
+function getMessages(){
+  keys = getLocalStorage('message');
+
+  for(i = 0; i < keys.length; i++){
+    var encrypted = localStorage.getItem(keys[i]);
+    key = keys[i];
+    $('ul#messages').append('<li data-key="'+key+'" data-message="'+encrypted+'">'+key+'<br><input type="text" placeholder="Passphrase" class="key"><input type="button" class="decrypt" value="Decrypt"><textarea disabled class="decrypted">???</textarea></li>');
+  }
+}
+
+function insertAtCaret(el, text) {
+    var caretPos = el.selectionStart;
+    var textAreaTxt = el.value;
+    el.value = textAreaTxt.substring(0, caretPos) + text + textAreaTxt.substring(caretPos);
+};
+
+
+$( document ).ready(function(){
+  showAll();
+
+  getMessages();
+
+  // Keeps Track of the currently selected text input for the Emoji tool
+  var active;
+  $(document).on('click', 'input[type="text"]', function(e){
+    e.stopPropagation();
+      active = $(this)
+  })
+  $('textarea').on('click', function(){
+      active = $(this);
+  })
+
+  // Filter off the Emoji's that don't match this text.
+  $('input[name="dummy"]').on('input', function(){
+    Filter($(this).val());
+  })
+
+  // TODO: insert at Caret.
+  $('#emojiSelector li').on('click', function (){
+    var newText = active.val() + $(this).text();
+    active.val(newText);
+  })
+
+  // Encrypt
+  $('input[type="submit"]').on('click', function(e){
+    e.preventDefault();
+
+    var passphrase = b64EncodeUnicode($('input[name="passphrase"]').val());
+    var message = $('textarea[name="message"]').val();
+
+    var encrypted = encrypt(message, passphrase);
+    var decrypted = decrypt(encrypted, passphrase);
+
+    key = "message-"+Date.now();
+
+    localStorage.setItem(key, encrypted);
+
+    $('ul#messages').append('<li data-key="'+key+'" data-message="'+encrypted+'">'+key+'<br><input type="text" placeholder="Passphrase" class="key"><input type="button" class="decrypt" value="Decrypt"><textarea disabled class="decrypted">???</textarea></li>');
+
+
+  })
+
+  // Decrypt
+  $(document).on('click', 'ul#messages li input.decrypt', function(e){
+    var message = $(this).parent().attr('data-message');
+    var emojiphrase = $(this).parent().find('input.key').val();
+
+    var passphrase = b64EncodeUnicode(emojiphrase);
+
+    var decrypted = decrypt(message, passphrase);
+    if(decrypted.length){
+      $(this).parent().find('.decrypted').val(decrypted);
+    } else {
+      $(this).parent().find('.decrypted').val('');
+      alert('Bad Passphrase');
+
+    }
+  })
+
+})
+
+
+
+</script>
+</head>
+<body>
+  <h1>Messages</h1>
+  <ul id="messages">
+    <!-- Try the konami code :) -->
+    <li data-key="message-1523050617783" data-message="U2FsdGVkX1/wozTrOWD9lbo8wboFvYMDmChvJrfOaDuNSgE3LfRf8Eo74zieV/SiURg2ZwwBhE19hrUmEtZirg==">message-1523050617783<br><input type="text" placeholder="Passphrase" class="key"><input type="button" class="decrypt" value="Decrypt"><textarea disabled class="decrypted">???</textarea></li>
+  </ul>
+
+  <h1>Super Secure Encryptor</h1>
+  <textarea name="message"></textarea><br>
+  <input type="text" name="passphrase" placeholder="Passphrase">  <input type="submit" value="Encrypt"> <br>
+
+  <h1> Emoji Keyboard </h1>
+  <input type="text" name="dummy" placeholder="Emoji Filter" />
+
+
+  <ul id="emojiSelector">
+
+</ul>
+</body>
+</html>
